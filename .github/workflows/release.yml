@@ -69,14 +69,3 @@ jobs:
             lkm/lkm-*_kernelsu.ko
             ksud/ksud-*
             ksuinit/*
-
-
-        - name: Prepare signing key
-      run: |
-    keytool -genkeypair -keystore key.jks -alias key -keyalg RSA \
-      -keysize 2048 -validity 10000 -storepass android -keypass android \
-      -dname "CN=KSU" >/dev/null 2>&1
-    echo "SIGN_KEYSTORE_FILE=key.jks" >> $GITHUB_ENV
-    echo "SIGN_KEY_ALIAS=key" >> $GITHUB_ENV
-    echo "SIGN_KEYSTORE_PASSWORD=android" >> $GITHUB_ENV
-    echo "SIGN_KEY_PASSWORD=android" >> $GITHUB_ENV
