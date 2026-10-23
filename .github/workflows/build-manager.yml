@@ -154,6 +154,7 @@ jobs:
         with:
           fetch-depth: 0
 
+      # [!] 改动 1：没有 KEYSTORE secret 时生成临时签名，避免 assembleRelease 因缺签名配置失败
       - name: Write key
         if: ${{ ( github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' )) || github.ref_type == 'tag' }}
         run: |
@@ -165,6 +166,23 @@ jobs:
               echo KEYSTORE_FILE='key.jks'
             } >> gradle.properties
             echo "${{ secrets.KEYSTORE }}" | base64 -d > key.jks
+          else
+            echo "::warning::KEYSTORE secret not set, generating a temporary keystore"
+            keytool -genkeypair \
+              -alias key \
+              -keyalg RSA -keysize 2048 \
+              -validity 10000 \
+              -storepass android \
+              -keypass android \
+              -dname "CN=KernelSU Temp Build" \
+              -storetype JKS \
+              -keystore key.jks
+            {
+              echo KEYSTORE_PASSWORD='android'
+              echo KEY_ALIAS='key'
+              echo KEY_PASSWORD='android'
+              echo KEYSTORE_FILE='key.jks'
+            } >> gradle.properties
           fi
 
       - name: Write PR key
@@ -277,6 +295,7 @@ jobs:
           cp -f "$X86_64_KSUD" target/x86_64-linux-android/release/ksud
           cp -f "$RISCV64_KSUD" target/riscv64-linux-android/release/ksud
 
+      # [!] 改动 2：去掉 test -n "$PROD_KEYSTORE"，secret 缺失时生成临时 keystore
       - name: Prepare signing inputs
         if: ${{ github.event_name == 'pull_request' || (github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')) || github.ref_type == 'tag' }}
         env:
@@ -295,12 +314,28 @@ jobs:
             echo "SIGN_KEYSTORE_PASSWORD=$PR_KEYSTORE_PASSWORD" >> $GITHUB_ENV
             echo "SIGN_KEY_PASSWORD=$PR_KEY_PASSWORD" >> $GITHUB_ENV
           else
-            test -n "$PROD_KEYSTORE"
-            echo "$PROD_KEYSTORE" | base64 -d > key.jks
-            echo "SIGN_KEYSTORE_FILE=key.jks" >> $GITHUB_ENV
-            echo "SIGN_KEY_ALIAS=$PROD_KEY_ALIAS" >> $GITHUB_ENV
-            echo "SIGN_KEYSTORE_PASSWORD=$PROD_KEYSTORE_PASSWORD" >> $GITHUB_ENV
-            echo "SIGN_KEY_PASSWORD=$PROD_KEY_PASSWORD" >> $GITHUB_ENV
+            if [ -n "$PROD_KEYSTORE" ]; then
+              echo "$PROD_KEYSTORE" | base64 -d > key.jks
+              echo "SIGN_KEYSTORE_FILE=key.jks" >> $GITHUB_ENV
+              echo "SIGN_KEY_ALIAS=$PROD_KEY_ALIAS" >> $GITHUB_ENV
+              echo "SIGN_KEYSTORE_PASSWORD=$PROD_KEYSTORE_PASSWORD" >> $GITHUB_ENV
+              echo "SIGN_KEY_PASSWORD=$PROD_KEY_PASSWORD" >> $GITHUB_ENV
+            else
+              echo "::warning::KEYSTORE secret not set, repacking with a temporary keystore"
+              keytool -genkeypair \
+                -alias key \
+                -keyalg RSA -keysize 2048 \
+                -validity 10000 \
+                -storepass android \
+                -keypass android \
+                -dname "CN=KernelSU Temp Build" \
+                -storetype JKS \
+                -keystore key.jks
+              echo "SIGN_KEYSTORE_FILE=key.jks" >> $GITHUB_ENV
+              echo "SIGN_KEY_ALIAS=key" >> $GITHUB_ENV
+              echo "SIGN_KEYSTORE_PASSWORD=android" >> $GITHUB_ENV
+              echo "SIGN_KEY_PASSWORD=android" >> $GITHUB_ENV
+            fi
           fi
 
       - name: Repack and resign
