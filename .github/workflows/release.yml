@@ -71,8 +71,8 @@ jobs:
             ksuinit/*
 
 
-            - name: Prepare signing key
-  run: |
+        - name: Prepare signing key
+      run: |
     keytool -genkeypair -keystore key.jks -alias key -keyalg RSA \
       -keysize 2048 -validity 10000 -storepass android -keypass android \
       -dname "CN=KSU" >/dev/null 2>&1
